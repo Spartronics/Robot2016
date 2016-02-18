@@ -27,6 +27,7 @@
 		<Property Name="host.ResponsivenessCheckPingTimeout" Type="UInt">1000</Property>
 		<Property Name="host.TargetCPUID" Type="UInt">8</Property>
 		<Property Name="host.TargetOSID" Type="UInt">8</Property>
+		<Property Name="NI.SortType" Type="Int">3</Property>
 		<Property Name="target.cleanupVisa" Type="Bool">false</Property>
 		<Property Name="target.DoNotReboot" Type="Bool">true</Property>
 		<Property Name="target.FPProtocolGlobals_ControlTimeLimit" Type="Int">300</Property>
@@ -105,10 +106,24 @@ AddOutputFilter chunkFilter
 		</Item>
 		<Item Name="Support Code" Type="Folder">
 			<Item Name="Compute Delta Float.vi" Type="VI" URL="../RoboPos/Compute Delta Float.vi"/>
+			<Item Name="Distance.vi" Type="VI" URL="../Support/Distance.vi"/>
 			<Item Name="Elapsed Times.vi" Type="VI" URL="../Elapsed Times.vi"/>
 			<Item Name="Flow Control Wait.vi" Type="VI" URL="../RoboPos/Flow Control Wait.vi"/>
+			<Item Name="GetHighestN1DFrom2D.vi" Type="VI" URL="../Support/GetHighestN1DFrom2D.vi"/>
+			<Item Name="GetLargest1DFrom2D.vi" Type="VI" URL="../Support/GetLargest1DFrom2D.vi"/>
 			<Item Name="limit.vi" Type="VI" URL="../Support/limit.vi"/>
+			<Item Name="TimeDiff.vi" Type="VI" URL="../Support/TimeDiff.vi"/>
 			<Item Name="Tolerance.vi" Type="VI" URL="../Support/Tolerance.vi"/>
+		</Item>
+		<Item Name="Vision" Type="Folder">
+			<Item Name="NoLaterate.vi" Type="VI" URL="../Support/NoLaterate.vi"/>
+			<Item Name="Bilaterate.vi" Type="VI" URL="../Support/Bilaterate.vi"/>
+			<Item Name="Trilaterate.vi" Type="VI" URL="../Support/Trilaterate.vi"/>
+			<Item Name="BallCalc.vi" Type="VI" URL="../Vision/BallCalc.vi"/>
+			<Item Name="GetGoalPos.vi" Type="VI" URL="../Vision/GetGoalPos.vi"/>
+			<Item Name="ParseGoalPos.vi" Type="VI" URL="../Vision/ParseGoalPos.vi"/>
+			<Item Name="WallBallistics.vi" Type="VI" URL="../Vision/WallBallistics.vi"/>
+			<Item Name="WhichGoalVisible.vi" Type="VI" URL="../Vision/WhichGoalVisible.vi"/>
 		</Item>
 		<Item Name="Team Code" Type="Folder">
 			<Item Name="Autonomous Independent.vi" Type="VI" URL="../Autonomous Independent.vi"/>
@@ -122,6 +137,7 @@ AddOutputFilter chunkFilter
 			<Item Name="Vision Processing.vi" Type="VI" URL="../Vision Processing.vi"/>
 		</Item>
 		<Item Name="Robot Main.vi" Type="VI" URL="../Robot Main.vi"/>
+		<Item Name="TurningPID.vi" Type="VI" URL="../RoboPos/TurningPID.vi"/>
 		<Item Name="Dependencies" Type="Dependencies">
 			<Item Name="vi.lib" Type="Folder">
 				<Item Name="8.6CompatibleGlobalVar.vi" Type="VI" URL="/&lt;vilib&gt;/Utility/config.llb/8.6CompatibleGlobalVar.vi"/>
@@ -254,6 +270,7 @@ AddOutputFilter chunkFilter
 				<Item Name="NetComm_UnloadCPPStartupProgram.vi" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/SystemInterfaces/NetworkCommunication/NetComm_UnloadCPPStartupProgram.vi"/>
 				<Item Name="NetComm_UsageReport_report.vi" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/SystemInterfaces/NetworkCommunication/NetComm_UsageReport_report.vi"/>
 				<Item Name="NetComm_UsageReport_ResourceType.ctl" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/SystemInterfaces/NetworkCommunication/NetComm_UsageReport_ResourceType.ctl"/>
+				<Item Name="NI_AALPro.lvlib" Type="Library" URL="/&lt;vilib&gt;/Analysis/NI_AALPro.lvlib"/>
 				<Item Name="NI_FileType.lvlib" Type="Library" URL="/&lt;vilib&gt;/Utility/lvfile.llb/NI_FileType.lvlib"/>
 				<Item Name="NI_LVConfig.lvlib" Type="Library" URL="/&lt;vilib&gt;/Utility/config.llb/NI_LVConfig.lvlib"/>
 				<Item Name="NI_PackedLibraryUtility.lvlib" Type="Library" URL="/&lt;vilib&gt;/Utility/LVLibp/NI_PackedLibraryUtility.lvlib"/>
@@ -586,15 +603,14 @@ AddOutputFilter chunkFilter
 				<Item Name="WPI_UtilitiesFRCAutomaticValuePublisher.vi" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/WPI/Utilities/WPI_UtilitiesFRCAutomaticValuePublisher.vi"/>
 				<Item Name="WPI_UtilitiesTimebaseConstants.vi" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/WPI/Utilities/WPI_UtilitiesTimebaseConstants.vi"/>
 				<Item Name="Write Value Core.vi" Type="VI" URL="/&lt;vilib&gt;/Rock Robotics/Network Tables/Write Value Core.vi"/>
+				<Item Name="NI_PID__prctrl compat.lvlib" Type="Library" URL="/&lt;vilib&gt;/addons/control/pid/NI_PID__prctrl compat.lvlib"/>
+				<Item Name="NI_PID_pid.lvlib" Type="Library" URL="/&lt;vilib&gt;/addons/control/pid/NI_PID_pid.lvlib"/>
+				<Item Name="lvpidtkt.dll" Type="Document" URL="/&lt;vilib&gt;/addons/control/pid/lvpidtkt.dll"/>
 			</Item>
-			<Item Name="BallCalc.vi" Type="VI" URL="../Vision/BallCalc.vi"/>
-			<Item Name="Bilaterate.vi" Type="VI" URL="../Support/Bilaterate.vi"/>
 			<Item Name="FRC_NetworkCommunication.dll" Type="Document" URL="FRC_NetworkCommunication.dll">
 				<Property Name="NI.PreserveRelativePath" Type="Bool">true</Property>
 			</Item>
-			<Item Name="GetGoalPos.vi" Type="VI" URL="../Vision/GetGoalPos.vi"/>
-			<Item Name="GetHighestN1DFrom2D.vi" Type="VI" URL="../Support/GetHighestN1DFrom2D.vi"/>
-			<Item Name="GetLargest1DFrom2D.vi" Type="VI" URL="../Support/GetLargest1DFrom2D.vi"/>
+			<Item Name="lvanlys.dll" Type="Document" URL="/&lt;resource&gt;/lvanlys.dll"/>
 			<Item Name="NiFpgaLv.dll" Type="Document" URL="NiFpgaLv.dll">
 				<Property Name="NI.PreserveRelativePath" Type="Bool">true</Property>
 			</Item>
@@ -607,10 +623,6 @@ AddOutputFilter chunkFilter
 			<Item Name="nivissvc.dll" Type="Document" URL="nivissvc.dll">
 				<Property Name="NI.PreserveRelativePath" Type="Bool">true</Property>
 			</Item>
-			<Item Name="ParseGoalPos.vi" Type="VI" URL="../Vision/ParseGoalPos.vi"/>
-			<Item Name="Trilaterate.vi" Type="VI" URL="../Support/Trilaterate.vi"/>
-			<Item Name="WallBallistics.vi" Type="VI" URL="../Vision/WallBallistics.vi"/>
-			<Item Name="WhichGoalVisible.vi" Type="VI" URL="../Vision/WhichGoalVisible.vi"/>
 		</Item>
 		<Item Name="Build Specifications" Type="Build">
 			<Item Name="FRC Robot Boot-up Deployment" Type="{69A947D5-514E-4E75-818E-69657C0547D8}">
