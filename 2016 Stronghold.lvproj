@@ -18,7 +18,7 @@
 	</Item>
 	<Item Name="Target" Type="RT myRIO">
 		<Property Name="alias.name" Type="Str">Target</Property>
-		<Property Name="alias.value" Type="Str">roboRIO-5048-FRC.local</Property>
+		<Property Name="alias.value" Type="Str">roboRIO-6666-FRC.local</Property>
 		<Property Name="CCSymbols" Type="Str">OS,Linux;CPU,ARM;DeviceCode,76F2;TARGET_TYPE,RT;</Property>
 		<Property Name="crio.ControllerPID" Type="Str">76F2</Property>
 		<Property Name="crio.family" Type="Str">ARMLinux</Property>
@@ -103,6 +103,7 @@ AddOutputFilter chunkFilter
 		<Item Name="RoboPos" Type="Folder">
 			<Item Name="GetRobotPos.vi" Type="VI" URL="../RoboPos/GetRobotPos.vi"/>
 			<Item Name="RobotGoToCoord.vi" Type="VI" URL="../RoboPos/RobotGoToCoord.vi"/>
+			<Item Name="TurningPID.vi" Type="VI" URL="../RoboPos/TurningPID.vi"/>
 		</Item>
 		<Item Name="Support Code" Type="Folder">
 			<Item Name="Compute Delta Float.vi" Type="VI" URL="../RoboPos/Compute Delta Float.vi"/>
@@ -124,6 +125,7 @@ AddOutputFilter chunkFilter
 			<Item Name="ParseGoalPos.vi" Type="VI" URL="../Vision/ParseGoalPos.vi"/>
 			<Item Name="WallBallistics.vi" Type="VI" URL="../Vision/WallBallistics.vi"/>
 			<Item Name="WhichGoalVisible.vi" Type="VI" URL="../Vision/WhichGoalVisible.vi"/>
+			<Item Name="TowerIdent.vi" Type="VI" URL="../Vision/TowerIdent.vi"/>
 		</Item>
 		<Item Name="Team Code" Type="Folder">
 			<Item Name="Autonomous Independent.vi" Type="VI" URL="../Autonomous Independent.vi"/>
@@ -137,7 +139,6 @@ AddOutputFilter chunkFilter
 			<Item Name="Vision Processing.vi" Type="VI" URL="../Vision Processing.vi"/>
 		</Item>
 		<Item Name="Robot Main.vi" Type="VI" URL="../Robot Main.vi"/>
-		<Item Name="TurningPID.vi" Type="VI" URL="../RoboPos/TurningPID.vi"/>
 		<Item Name="Dependencies" Type="Dependencies">
 			<Item Name="vi.lib" Type="Folder">
 				<Item Name="8.6CompatibleGlobalVar.vi" Type="VI" URL="/&lt;vilib&gt;/Utility/config.llb/8.6CompatibleGlobalVar.vi"/>
