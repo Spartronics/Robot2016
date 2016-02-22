@@ -1,0 +1,797 @@
+﻿2016 FRC Robot Code Documentation - Aaron Hancock
+==============================================
+
+My code for the 2016 autonomous is both stupidly complex and stupidly simple at the same time.
+However, I know you probably don't have the time to reverse engineer the entire thing, so here's some
+much-needed documentation.
+
+The general flow of the code goes something like this:
+
+Always[ (Vision Processing.vi)
+	- Get goal positions from camera (GetGoalPos.vi/TowerIdent.vi)
+	- Get robot position from goal positions (ParseGoalPos.vi)
+	- Store robot position in Global Variable
+]
+- Get position of chosen ramp  (from Global Variable)
+- Goto ramp (RobotGotoCoord.vi)
+- Run SubVI for chosen defense until cleared
+- Go to nearest tower side (RobotGotoCoord.vi)
+- Shoot ball (not implemented yet)
+
+Here's some detail for every function:
+
+GLOBAL VARIABLES
+=====================
+	- Position Info (Cluster)
+		- X (DBL, inches from left of field)
+		- Y (DBL, inches from driver station wall)
+		- Angle (DBL, radians from forwards)
+		- Velocity (DBL, inches/sec)
+		- Timestamp (U32, milliseconds)
+	- Target Info (Cluster)
+		- Angle (DBL, deg from floor)
+		- RPM (DBL)
+	- Defenses Enum (Enum Template)
+	- Defense Dist (DBL Array)
+		Y offset of robot from defense ramp for each defense type.
+	- Defense Offset (DBL Array)
+		X offset of robot from defense ramp for each defense type
+
+DASHBOARD
+==============
+Inputs:
+	- Encoder indicators?
+Outputs:
+	- Defense Type (Enum[Defenses Enum])
+	- Ramp No. (U32, range[1-5])
+Notes:
+	Unfortunately we need a custom dashboard. Can I just say I don't like these a whole lot?
+	This serves an incredibly essential purpose though. We need it so that auton knows what
+	to do.
+
+	In addition we might also throw some sensor data on there, if we can. Frankly that's
+	about it. No fancy command sequencer this time around. Thank goodness.
+
+VISION
+========		
+
+Vision Processing.vi
+-----
+Inputs:
+	- Vision Target (either Tower Lights or High Goal ("Goals"))
+	- Image Size (160x120, 320x240, 640x480)
+	- Use Gyro/Accelro (Boolean)
+Outputs:
+	- Position Info (Cluster, Global Variable)
+	- Target Info (Cluster, Global Variable)
+
+Constants:
+	- Camera Angle (rad, from floor)
+
+Calls:
+	- GetGoalPos.vi OR TowerIdent.vi (Depends on chosen vision target)
+	- ParseGoalPos.vi
+Actions:
+	- Get goal sizes and positions on camera (GetGoalPos.vi)
+	- Crunch out robot position from those particles (ParseGoalPos.vi)
+	- Splice in gyro and accelerometer measurements for angle/velocity (optional)
+	- Send position/angle/velocity to a Global Variable
+Notes:
+	You could totally run this at 640x480 at full framerate. It takes up 90% of the CPU, but still.
+
+	We also put ballistics info for the high goal in a global variable, if needed later. (Our robot
+	doesn't have a shooter, but it is totally ready once we find the room!)
+
+GetGoalPos.vi/TowerIdent.vi
+-----
+Inputs:
+	- Image Src (IMAQ image)
+	- Error In
+Outputs:
+	- Number of Particles (I32)
+	- Particle Measurements (DBL Array, Pixels)
+		- Center of Mass X
+		- Bounding Box Width/Height (depends on target type)
+	- Error Out
+Constants:
+	- Thresholds, etc. (The meat of the detection)
+Calls:
+	- Various built-in vision procseeing SubVis
+Actions:
+	- Takes image in and spits particle measurements out
+Notes:
+	These are usually minimally modified versions of the output of the National Instruments
+	Vision Assistant. Their scripts should be provided with the source code.
+
+	The GetGoalPos returns bounding box height, and TowerIdent returns height. The logic behind
+	this is that the goals are guarenteed to be skewed width-wise due to perspective, and the
+	tower lights are guarenteed to be clipped by the camera boundaries. Setting the correct
+	goal type in Vision Processing.vi will compensate for this.
+
+	If you plan on making your own vision target type, here's some handy vision tips:
+		- Color Threshold takes too long. Always. If you can, convert to greyscale first.
+
+		- When converting to greyscale, use Luminance. Don't use Value or Intensity; they
+		  take too long.
+
+		- If you are planning on basing your vision off of color, use primary colors (red,
+		  green or blue). Using secondary colors (magenta, yellow, cyan) is quite hard
+		  because then you'd have to use color operators. And especially make sure you
+		  don't mix multiple secondary colors, or a secondary and a primary in the same
+		  image. Then you'd have to extract each channel individually, AND them together,
+		  and then convert to greyscale.
+
+		- Your goal is a binary image, as that's how you get particles. The fastest way
+		  to do that is a threshold on a greyscale image. Get there and you're set.
+
+		- Try to do as much filtering as possible in hardware, whether it be with camera
+		  settings or physically putting a filter on it.
+
+ParseGoalPos.vi
+-----
+Inputs:
+	- Camera Angle (DBL, rad)
+	- Goal Measurements (DBL Array, Pixels)
+		- Center of Mass X
+		- Bound Box Width/Hright (depends on target type)
+	- Old Coords (Cluster)
+		- X (DBL, inches from left barrier)
+		- Y (DBL, inches from driver wall)
+		- Angle (DBL, radians from Y axis)
+		- Timestamp (U32, milliseconds)
+	- Vision Target (Enum)
+		- Tower Lights
+		- Goals
+Outputs:
+	- New Coords (Cluster, same as Old Coords)
+	- Shooter Angle (DBL, deg from floor, optional)
+	- Target RPM (DBL, optional)
+
+Constants:
+	- Vision Target Information (Cluster, depends on value of Vision Target)
+		- Max. No. of Goals (I32)
+		- Calculate Ballistics (Boolean)
+		- Object Width (DBL, inches)
+		- Use Height (Boolean)
+Calls:
+	- BallCalc.vi
+	- GetHighestN1DFrom2D.vi
+	- WhichTowerVisible.vi/WhichGoalVisible.vi (Depends on Vision Target)
+	- Bilaterate.vi/Trilaterate.vi/Nolaterate.vi (Depends on size of Goal Measurements)
+	- Distance.vi
+	- TimeDiff.vi
+Actions:
+	- Determine how many particles exist
+	- Filter for the largest 2/3 particles (depending on goal type) (GetLargestN1DFrom2D.vi)
+	- Determine how many targets have been found
+	- Compute ballistics info and distance for all targets (BallCalc.vi)
+	- Sort targets by X offset (GetLargestN1DFrom2D.vi)
+	- Detmine which targets are being detected (WhichGoalVisible.vi/WhichTowerVisible.vi)
+	- Trilaterate or Bilaterate if 2+ targets exist (Trilaterate.vi/Bilaterate.vi)
+	- Otherwise guess based on gyro/accelro (Nolaterate.vi)
+	- Compute velocity and current heading from old and new positions (as backup)
+Notes:
+	This is where all the fun stuff lies. Transforming a list of particles to an X and a Y coord.
+	To simplify, this takes the largest targets, figures out the distance to them, and then
+	determines position based on that list of distances.
+
+	The Shooter Angle and Target RPM are only calculated if tracking the high goals. Otherwise
+	their value will always be 0.	
+
+	Angle is determined by translating the old and new coords so that the old coords are at
+	0,0, and then using the Atan2 function to get an angle. We use this trick a lot, because it
+	works.
+
+	Velocity is determined by calculating the distance from the old position and the new
+	position (Distance.vi) and dividing it by the seconds elapsed.
+	We get the seconds elapsed by using the millisecond timer. We store the timer's value
+	with the old coord and when we are ready to get the new value we read from the
+	timer again and take the difference. (TimeDiff.vi) Then we divide it by 1000 to get
+	seconds.
+
+	This SubVI is largely glue to other SubVIs, so details about the math involved will be
+	discussed there.
+
+BallCalc.vi
+-----
+Inputs:
+	- Camera Angle (DBL, rad)
+	- Object Viewport Size (DBL, px)
+	- Image Size (U32, px)
+	- Vertical Mode (Boolean)
+	- Object Size (DBL, inches)
+Outputs:
+	- Target Distance (DBL, inches)
+	- Shooter Angle (DBL, deg)
+	- Target RPM (DBL)
+Constants:
+	- Sensor Size (DBL)
+	- Object Height (DBL, inches)
+	- Gravitational Acceleration (DBL, inches)
+	- Wheel Diameter (DBL, inches)
+	- Wheel Count (DBL)
+Calls:
+	- WallBallistics.vi
+Actions:
+	- Use camera sensor size and similar triangles to get distance from camera to goal
+	- Use trig to determine distance to target ON FLOOR from camera angle and distance THROUGH AIR
+	- Figure out angle and velocty for shooter (WallBallistics.vi)
+	- Transform velocity into RPMs using rotational velocity formulas
+Notes:
+	That distance thing is funky math. Funky, not exactly functional math.
+
+	It is, more or less, what is described at 
+	http://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
+	which is a technique that uses similar triangles to get a result. Unfortunately, the method
+	it states for getting the sensor size is never consistent, not even within a margin of error.
+	Plugging that data in Excel does give a nice power curve, but that didn't quite work out for
+	some reason.
+
+	Also, if you use another webcam, you'll need to recalibrate those numbers. Do that by simply
+	measuting the width in pixels of an object of a known width at known distances from the camera.
+	See that hyperlink above for more details.
+
+WallBallistics.vi
+-----
+Inputs:
+	- Target Distance (DBL, [distance unit] on floor)
+	- Object Y Offset (DBL, [distance unit])
+	- Gravitational Constant (DBL, [distance unit]/sec^2)
+Outputs:
+	- Velocity (DBL< [distance unit]/sec)
+	- Angle (DBL, rad)
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Computes most efficient angle for shooting
+	- Computes velocity to shoot at.
+Notes:
+	Pretty much lifted straight from http://hyperphysics.phy-astr.gsu.edu/hbase/traj.html#tra14
+	(Well, lifted from the Javascript in that page, anyways.)
+	It's basic high school physics and it works well, man.
+
+	The formula is like such:
+		h = height; d = distance; g = gravity; ϴ = angle; V = velocity
+		ϴ = atan( 4h / 2d )
+		V = √( 2dg / sin(2ϴ) )
+
+WhichTowerVisible/WhichGoalVisible.vi
+-----
+Inputs:
+	- Goal Measurements (DBL Array)
+		- X Offset
+		- Distance
+	- Number of Goals (I32)
+	- X Position (I32)
+Outputs:
+	- Goal A (DBL Cluster)
+		- X (inches from left wall)
+		- Y (inches from driver wall)
+		- Dist (inches from target on floor)
+	- Goal B (DBL Cluster, same as Goal A)
+	- Goal C (DBL Cluster. same as Goal A)
+Constants:
+	- Target Positions (DBL Cluster, same as Goal A)
+	- Tower Midpoint (DBL, inches from left wall)
+Calls:
+	None
+Actions:
+	- If max. goals, splice distance into Target Positions and return
+	- If max-1 goals:
+		- Select the (max-1) goals closest to the robot as Goals A and B
+		- Splice distance into Goals A and B and return
+	- Otherwise:
+		- Return Target Positions without modifications
+Notes:
+	Alright, the actions are lying a little bit.  We do the ammitedly dumb thing of simply testing the
+	side of the field the robot is on (Left or Right) and selecting the left and right goals, respectively.
+
+	A more sensible option would be to measure the angle from the robot to the target and 
+	selecting the N goals with the smallest difference between target angle and robot angle.
+	Equally sensible would be using an array instead of 3 hard-coded outputs. But all that requires
+	a rewrite and an edit to ParseGoalPos and Bi/Tri/Nolaterate and I really don't feel like doing
+	that right now.
+	
+	Either way, it works, so eh.
+
+Bilaterate/Trilaterate.vi
+-----
+Inputs:
+	- Goal A (DBL Cluster)
+		- X (inches from left wall)
+		- Y (inches from driver wall)
+		- Dist (inches from target on floor)
+	- Goal B (DBL Cluster, same as Goal A)
+	- Goal C (DBL Cluster. same as Goal A)
+Outputs:
+	- X (DBL, inches from left wall)
+	- Y (DBL, inches from right wall)
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Translate goals so that Goal A is on 0,0
+	- Find angle from Goal A to Goal B
+	- Rotate goals so that Goal B lies on X axis
+	- Trilaterate (See notes)
+	- Un-rotate point
+	- Un-translate point
+	- Return point's X/Y
+Notes:
+	I am going to tell you right now you should take a visit to the Wikipedia article on Trilateration.
+	
+	Essentially trilateration/bilateration is finding the intersection of 3/2 circles, respectively.
+	The idea is that if you know the radius and position of 3 circles, you should know where they
+	intersect. If you set the radiuses to your distance from those circles, then the point where the
+	circles intersect and you are the chosen distances from those circles should be where you are.
+	Essentially this is how cell phone towers are able to locate you without using GPS.
+	
+	Bilateration is a tough trickier. Instead of getting 1 intersection, you get 2, due to the missing
+	information. (Imagine a Venn diagram. That's what we're dealing with.) However, one of the
+	points will be much further away from us than the other (and also well behind the driver wall)
+	so we simply pick the point closest to us.
+
+	Have I mentioned math is fun yet? Becuase it's so rad. (ha ha math jokes.)
+
+Monolaterate.vi (NOT IMPLEMENTED)
+-----
+Inputs:
+	- Goal A (DBL Cluster)
+		- X (inches from left wall)
+		- Y (inches from driver wall)
+		- Dist (inches from target on floor)
+	- Goal B (DBL Cluster, same as Goal A)
+	- Goal C (DBL Cluster. same as Goal A)
+Outputs:
+	- X (DBL, inches from left wall)
+	- Y (DBL, inches from right wall)
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Find line from robot's position and heading
+	- Find intersection of line and target (represented as circle)
+	- Return X/Y of nearest intersection
+Notes:
+	There's nothing really stopping me from implementing this besides the fact that I don't feel
+	like typing in more math. I probably should implement this.
+
+	At this point we're getting to the slightly desperate side. We HAVE to assume our gyro
+	is correct, or else we'll start getting off. That being said we don't have to assume our
+	accelerometer is correct, which is probably a good thing because those are notoriously
+	unreliable for anything besides, well, getting acceleration.
+
+	That being said I'll take this over no-lateration any day. That's just desperation.
+
+Nolaterate.vi
+-----
+Inputs:
+	- Old Coords (Cluster, same as global variable Poistion Info)
+Outputs:
+	- X (DBL, inches from left wall)
+	- Y (DBL, inches from right wall)
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Convert radius (velocity) and angle from polar coords to rect
+	- Translate point so that origin is on old X/Y
+	- Return X/Y of that point
+Notes:
+	This is the dumbest thing humanly possible. More or less we use trig to say "Hey. Our angle
+	is ϴ. Take the sin (Y) and cos (X) of that and multiply those by the velocity."
+	Essentially this just takes whatever speed and direction we were heading at and assumes
+	that we are still heading in that same direction at that same velocity. There is no feedback,
+	so if it crashes into a wall the robot simply won't know.
+
+	The catch is that if we update the angle and velocity through the gyroscope and accelero,
+	we will have some feedback. The result still won't be great (this literally becomes dead
+	reckoning interleaved with shoddy integration), but at least if we crash into a wall we'll
+	know and be able to compensate for that.
+
+
+SUPPORT
+==========
+
+Distance.vi
+-----
+Inputs:
+	- Point A (DBL Cluster)
+		- X ([distance unit])
+		- Y ([distance unit])
+	- Point B (DBL Cluster, same as Point A)
+Outputs:
+	- Distance (DBL, [distance unit])
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Computes distance between Point A and Point B
+Notes:
+	This is literally the distance formula, back from middle school. I'm honestly just including
+	this one for the sake of completion.
+
+TimeDiff.vi
+-----
+Inputs:
+	- Time A (U32, milliseconds)
+	- Time B (U32, milliseconds)
+Outputs:
+	- Time Diff (U32, milliseconds)
+Constants:
+	- 2^32
+Calls:
+	None
+Actions:
+	- Convert Time A and Time B to U64 if Time B has overflowed.
+	- If Time B has overflowed, add 2^32 to it
+	- Take difference between Time A and Time B
+	- Convert difference to U32 and return
+Notes:
+	This is sort of a hack to get around how LabVIEW's millisecond timer works. The only way to
+	get time in LabVIEW with sub-second precision is via the Tick Count(ms) function. However,
+	if more than 2^32 milliseconds (49 days) has passed since whenever it started counting,
+	it will overflow and start counting again at 0. Taking the difference of that could be
+	catastrophic. Although there's probably no chance of that ever happening, I like to be
+	safe. It makes me feel good. 
+
+	Also a fun fact: if the limit was 2^64, it'd take 1/8 the age of the Earth to overflow that.
+	And I'd still include this SubVI.
+
+GetHighest1DFrom2D.vi
+-----
+Inputs:
+	- 2D Input (Array, DBL, 2D)
+	- Col No. (I32)
+Outputs:
+	- 1D Output (Array, DBL)
+	- Max Index(es) (I32)
+Constants:
+	None
+Calls:
+	None
+Actions:
+	- Rotate 2D array so that (x, y) is (y, x)
+	- Get the (Row No.)th subarray
+	- Get the index of that highest value from that subarray
+	- Get the (index)th row from the 2D array.
+Notes:
+	This gets the highest subarray from a 2D array. It's a weird hack, but it works well.
+	Highest is defined as "the highest value in column (Col No.)".
+
+	Pretty much this is done by filtering out just the column we want to sort by, finding what
+	index the highest value of that column is in, and getting the corresponding row.
+
+GetHighestN1DFrom2D.vi
+-----
+Inputs:
+	- No. Outputs (I32)
+	- Array (Array, DBL, 2D)
+	- Sort by Col No. (I32)
+Outputs:
+	- Out (Array, DBL, 2D)
+Constants:
+	None
+Calls:
+	GetHighest1DFrom2D.vi
+Actions:
+	- Init a blank 2D array (Out)
+	- Do (No. Outputs) times:
+		- Get highest 1D array from input array (GetHighest1DFrom2D.vi)
+		- Remove that array from the input array
+		- Add that array to the end of the output array
+Notes:
+	This is like GetHighest1DFrom2D.vi (it really is just a wrapper around that), but you can
+	get multiple 1D arrays out.
+	
+	You can also use this to simple sort by setting No. Outputs to the size of the array.
+	Yeah, hacks on top of hacks!
+
+AUTONOMOUS
+=============
+Autonomous Independent.vi
+-----
+Inputs:
+	- Position Info (Cluster, Global Variable)
+	- Ramp no. (U32, Dashborad)
+	- Defense No. (Enum[Defenses Enum], Dashboard)
+Outputs:
+	! Drives robot
+Constants:
+	- Ramp Positions (Array of Cluster)
+		- X (DBL)
+		- Y (DBL)
+	- Low Goal Angle (Array of DBL)
+		- Left goal
+		- Right goal
+Calls:
+	- RobotGotoCoord.vi
+	- Distance.vi
+	One of:
+		[auton modes]
+Actions:
+	- Get defense type and ramp number from dashboard
+	- Get robot position/angle/velocity from Global Variable
+	- Go to ramp's position + offset for defense
+	- Execute a SubVI for the chosen defense until robot is at a position in the Courtyard
+	- Find the nearest goal
+	- Go to that goal
+Notes:
+	This takes the vision information and does something with it. Frankly, for a "smart" auton,
+	it's pretty dumb. This is just a wrapper that calls other routines in order (cheifely the
+	"go to" subVi and the autonomous modes).
+
+
+RobotGotoCoord.vi
+-----
+Inputs:
+	- Status Input (Cluster)
+		- Mode (Enum)
+			- First Run
+			- Initial Angle
+			- Driving
+			- Final Angle
+			- Done
+		- Backwards? (Boolean)
+		- Calculated Target Angle (DBL, rad)
+	- X/Y/a Target (Cluster)
+		- X (DBL, inches)
+		- Y (DBL, inches)
+		- Angle (DBL, rad)
+	- Accel PID Gains (Cluster)
+		- P (DBL)
+		- I (DBL)
+		- D (DBL)
+	- RobotDriveDevRef (Drive Cluster)
+	- Position Info (Cluster, Global Variable)
+	- Error In
+
+Outputs:
+	- Status Output (Cluster, same as Status Input)
+	- Error Out
+	! Drives robot
+Constants:
+	- Distance stop tolerance (DBL, inches)
+	- Drive Output Range (DBL Cluster[High, Low], % Motor Voltage)
+	- Angle stop tolerance (DBL, radians) [defined twice]
+Calls:
+	- TurningPID.vi
+Actions:
+	- Calculates angle to drive at from current position and target position
+	- Turns robot to that angle (TurningPID.vi)
+	- Drives forward until at target angle, compensating for turns (TurningPID.vi)
+	- Turns to target angle (optional) (TurningPID.vi)
+Notes:
+	This is sorta the meat of the autonomous. It was taken from last year's code
+	and modified to use PID and not be specific to encoders. (If, say, you figure
+	out a way to position yourself via echolocation or semaphore, this should still
+	work.)
+
+	You will need to call this continuously until StatusInput->Mode is "Done". This
+	is so you can abort early if needed. In your while loop, set the delay to something
+	reasonable (10ms works fine) and make sure Status Input and Status Ouput are connected
+	via shift register.
+
+	The PID will need to be tuned, so it is probably a good idea to do that somewhere
+	somewhat safe. Perhaps behind a blast shelter? (Hah hah, jokes about human life.)
+
+
+	This is a state machine. It will only go to the next stage once the previous stage
+	has completed. The state is stored in StatusInput->Mode.
+	
+	The state machine follows this order:
+		"First Run": Calculates the target angle
+		"Initial Angle": Orients robot towards calculated angle
+		"Driving": Drives robot at calculated angle towards point
+		"Final Angle" (optional): Orients robot to given angle in "Target X/Y/a"
+		"Done": Does nothing
+
+	The "First Run" mode is over, as it's only purpose to to calculate the target
+	angle to drive at.
+
+	Initial and Final Angle are done once the robot is detected to be facing the
+	angle specified by either the calculated target angle or the user, respectively.
+
+	Driving is done once the distance between the robot and the given point
+	is small enough to be within the margin of error.
+
+	Done will never end short of manually resetting the state.
+
+	Driving normally leads to Final Angle. However, if the Final Angle is less than 0,
+	this is skipped. The idea is that if the programmer does not care which angle the
+	robot ends up facing, we should not spend time reorienting ourselves.
+
+	Also, the First Run state determines whether it is more efficient to drive backwards.
+	If it is, it does. The logic is that there's no sense in turning a full 180 and then driving
+	when you could drive backwards. With this robot, thought, it might not be a smart idea.
+	I honestly don't know that.
+
+
+	A thing we *could* do is skip the Initial Angle if we can simply turn while driving.
+	You'd have to calculate your angle cutoff then based on your distance from the target
+	and your turing radius. You would also have to keep recalculating the target angle,
+	as you would not start driving straight. (Heck, we probably should be doing this
+	to begin with.) You could do this by resetting the state machine to "First Run" after
+	every time you call "Drive".
+
+TurningPID.vi
+-----
+Inputs:
+	- Current Angle (DBL, rad)
+	- Target Angle (DBL, rad)
+	- Invert Steering (Boolean)
+	- PID Gains (DBL Cluster)
+		- P (Proportion)
+		- I (Integration)
+		- D (Derivatation)
+Outputs:
+	- Angle Diff (DBL, rad)
+	- Left Motor %  (DBL)
+	- Right Motor % (DBL)
+Constants:
+	- Motor Range (DBL Cluster)
+		- Minimum Motor %
+		- Maximum Motor %
+Calls:
+	- Built-in PID SubVI
+Actions:
+	- Takes difference between Current angle and Target Angle
+	- Calls PID SubVI to attempt to get Difference to 0
+	- Takes PID outputs and multiplies one by -1 to get motor outputs
+Notes:
+	PID. It's necessary but it's a pain. You WILL need to calibrate this. I would throw something
+	in Test.vi if I knew how.
+
+	Also, the reason there's an Invert Steering is that the RobotGotoCoord.vi can move 
+	backwards if it's more efficient, and it needs to compensate for that.
+
+	
+
+GENERAL NOTES
+==================
+Vision Tracking:
+	Issues with tracking the goals mandated the addition of an additional, backup mode tha tracks the
+	lights on the towers. Three issues with this: 
+
+	- First, due to the absolutely tiny size of these lights, we lose a lot of granularity.
+	Having the robot position change be measures in inches when running at 160x120 is not
+	unusual.
+	
+	- Secondly, there are only two lights, meaning we are forced to use bilateration. Not a 
+	completely horrible downside, as bilateration is usually pretty accurate, but the additional
+	goal certainly helps with reducing error.
+
+	- Thirdly, the vision system will become absolutely useless if the tower is completely
+	weakend (something we kinda want) or the match enters the last 20 seconds (where the
+	lights strobe on and off at 0.5hz, meaning there's a consistent 1 second time period where
+	 we don't have vision data at all. Again, not awful (that's what the dead reckoning is for), but 
+	unsatisfactory.
+
+	However, the goals have their own fair share of problems. For one, a second camera is
+	required, and it probably should be attached to a servo for the sake of not losing the goals.
+	 (If not, we'll just have to point it up and hope we'll be fine.)
+
+	In fact, because the goals are going off of height (to remove error from angle), if it gets
+	clipped by the top of the frame (or the bottom, for that matter) we'll have to throw that goal
+	out. This leads to this being mostly useful far away. 
+
+	Also, on the physical side of things, the retro-reflective tape doesn't like to work at the
+	extreme angles the towers are placed. We'd have to have some really good filtering going on.
+	(Thankfully, we recently learned we can just turn the camera exposure way down, so that will
+	help quite a bit.)
+
+	A potential solution is to switch to the tower lights once the goals are being clipped. This is
+	particularly nice because it allows us to use the lights when they are close enough that
+	granularity won't be an issue. We still have to worry about potential lights-out situations,
+	but by then we'd be in Tele-op so it won't be that huge of a deal. (Actually, I think I'm going
+	to do that now.)
+
+Defense Types:
+	There are 9 defenses. They're all stupidly complicated in their own unique little way.
+	
+	Low Bar
+		This is a bit funky. Sure, all you have to do is drive, but you have to do so backwards
+		and with a giant cloth in the way. Frankly, we could probably turn vision off and
+		drive by the gyro. This is probably the easiest one to do.
+
+	Rough Terrain, Ramparts, Rock Wall, Moat
+		These are all mostly the same thing. All you have to do is drive over these. The 
+		problem lies in the fact that it is possible to get stuck or facing at the wrong angle 
+		entirely. In addition, vision would work, except for when the robot is facing not 
+		straight, which will be most the time.
+
+		We'll have to be at least a little smart here. If we get stuck (Velocity reads really
+		low) then we should attempt to back up and try again. That being said the
+		accelerometer will probalby be nigh-on useless when facing at a weird angle,
+		so we're back to square 1.
+
+		Let's be dumbly smart. If we're not over in, say, 5 seconds, then we should back
+		up and try again.
+
+		You could totally program this with just the Goto command, and frankly, you 
+		probably should just to keep your heading roughly intact.
+
+	Sally Port
+		This is pretty hard even with a human driving. Frankly, I'm not going to touch this 
+		for now. The humans are still trying to figure out a strategy for this, so I'll wait
+		for them to get that down.
+
+		In addition, vision is useless. So if we did do this, we're flying by gyro/accelro.
+
+	Drawbridge
+		More fly-by-gyro/accelero. Vision is useless, because there's a gigantic door in the
+		way. But it's not *entirely* useless. You see, after we think we've done it, we can
+		check the camera to see if the goals are visible. If they are, we did it. If not, we
+		failed, and we should redo it (or at least not immediately crash into the door
+		full-speed ahead.)
+
+		Only problem is we won't know how we failed, so we just have to assume we were
+		too far away. Probably an incorrect assumption, but the only logical one.
+
+		We do this by getting in position (we can't verify this, so we have to just assume it's
+		already lined up), throwing up the hook, driving forwards a bit, and pulling down 
+		the hook while driving backwards at a slowish speed. This is kinda complicated
+		(and frankly, likely to fail) so I wouldn't do this during Auton.
+
+	Cheval de Frise
+		Vision is an issue, as these are kinda tall. This makes lining up sorta kinda hard.
+		However, we can determine when we're over by when the vision sees the goals
+		and not the floor or the ceiling. Just make sure we filter out that split second
+		where we tranisiton from facing up to facing down.
+
+		We do this by putting down our arm onto the plank and driving forwards. This is
+		tricky, but I'm not exactly sure why. (The plank seems to have an issue with not
+		going low enough.) If we are stuck (velocity is 0; keep in mind the accelerometer
+		at least is still somewhat reliable at this point), we do it again.
+
+		Unfortunately, we have no way to determine whether or not the plank is even 
+		down in the first place, so expect some trial and error via slammage.
+
+	Portcillus
+		Vision doesn't work. Sure, there's plexiglass holes, but they're holes. It's unreliable.
+		
+		We do this by drving up to it with the arm down (we could just drive slow and test
+		if we're not moving anymore. Dumb, but it works.), raising the arm, and driving 
+		forwards.
+
+		An issue is it getting caught on the drawbridge arm. If we're still not moving, just
+		jostle the low arm back and forth until we start moving. (I'd imagine we're
+		guarenteed to raise the gate, so we're not going to count that.)
+
+Using Autonomous Routines During Tele-op:
+	Right now there is no support for this, and frankly, it probably wouldn't be too terribly useful.
+	To do this, we've have to determine which defense we are at (both ramp no. and type), do 
+	the defense until cleared ala Auto, and then relinquish control back to the user. In addition, 
+	there probably should be an abort button in case it fails horribly.
+
+	Frankly, it wouldn't be impossible, but it's harder than you'd think, especially with half the
+	defenses	blocking vision completely, making getting position (and therefore ramp no.) 
+	impossible.
+
+When to Track Position:
+	It would probably be a Bad Idea to keep the vision on the whole match.
+
+	For one, the audience/drivers would not appreciate an insanely bright LED constanly shining
+	in their faces. For all I know, there's probably a rule against that (and if there isn't, there 
+	should be.)
+
+	Secondly, and probably the more important one, the vision system fails completely unless
+	you're facing the goal. If you're facing sideways, all you've got is the gyro and the 
+	accelerometer. And if you turn 180deg, the robot will suddenly think you've jumped half way
+	across the field and act accordingly.
+
+	The reason I say that is because the vision system only operates on one side of the field. It 
+	does not care in the slightest which way you're facing. For example, if you drove backwards
+	into your own courtyard, the vision would work fine, defenses nonwithstanding. If, then, you
+	turned 180deg and faced your goal, then as far as the vision is concerned you are now within
+	the opponet's courtyard.
+
+	Probably even more important, the vision is only useful when operating defenses or shooting
+	goals. There isn't even a reason to have the vision on. So let's save some CPU/eyeballs and
+	not do that.
