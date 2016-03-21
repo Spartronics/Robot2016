@@ -1,0 +1,35 @@
+We have:
+z = estimated velocity
+g = gravity
+t = expected direction of travel
+
+We need:
+- orientation of gravity
+- actual velocity
+
+How are we gonna do this? Heck if I know.
+What I *will* say is this. We should *only* expect movement in the X and Z axises.
+If there's movement elsewhere, you're tilted sideways or being shoved. Let's
+assume the more likely.
+
+So effectively that reduces us to two axises. This actually makes things a little
+bit easier, beleive it or not.
+
+The normal gravitaional rate can be modeled as a circle with radius g.
+If the accelerometer reads something on circle G, then you must not be
+accelerating. The angle of the point, then, is your tilt.
+
+Things get cranked up to eleventy-seven when you're moving. Then your circle
+is bigger, or perhaps smaller in the case of deacceleration. Which angle are
+you going at now?
+
+Let's get even funkier. The gravitational circle still exists, of course.
+Now, if you can estimate your velocity from something else, you can call that
+a second circle on the gravitational circle. Where the circle and the point
+intersect might be your angle.
+
+The problem with this is that we can only get incline or acceleration from this.
+We could get incline if we tilt the gyro so it faces up-down. So, whatev, that's
+fine.
+
+Say we have a semi-okayish idea of orientation.
