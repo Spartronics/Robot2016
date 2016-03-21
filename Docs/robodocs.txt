@@ -127,6 +127,9 @@ Notes:
 		- Try to do as much filtering as possible in hardware, whether it be with camera
 		  settings or physically putting a filter on it.
 
+		- You can get many measurements from Particle Analysis. Use them. They are so
+		  useful. Shoutouts to Convex Hull [anything], Area, and Perimeter.
+
 ParseGoalPos.vi
 -----
 Inputs:
